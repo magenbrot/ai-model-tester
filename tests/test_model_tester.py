@@ -13,11 +13,14 @@ from model_tester import (
     ModelInfo,
     TestResult,
     fetch_models,
+    filter_models_by_capabilities,
     format_capabilities,
     format_context_length,
     format_latency,
     get_headers,
     is_model_ignored,
+    model_matches_capability,
+    normalize_capability_name,
     parse_model_info,
     resolve_api_endpoints,
     test_single_model,
@@ -241,6 +244,85 @@ class TestFetchModels(unittest.TestCase):
         models = fetch_models("http://localhost:11434/v1", "", timeout=5)
         self.assertEqual(len(models), 2)
         self.assertEqual(models[0].id, "llama3.2:latest")
+
+
+class TestCapabilityFiltering(unittest.TestCase):
+    def test_normalize_capability_name(self):
+        self.assertEqual(normalize_capability_name("vision"), "image")
+        self.assertEqual(normalize_capability_name("IMAGE"), "image")
+        self.assertEqual(normalize_capability_name("tools"), "tools")
+        self.assertEqual(normalize_capability_name("tool"), "tools")
+        self.assertEqual(normalize_capability_name("functions"), "tools")
+        self.assertEqual(normalize_capability_name("reasoning"), "reasoning")
+        self.assertEqual(normalize_capability_name("thinking"), "reasoning")
+        self.assertEqual(normalize_capability_name("json"), "structured_outputs")
+        self.assertEqual(normalize_capability_name("streaming"), "streaming")
+        self.assertEqual(normalize_capability_name("chat"), "chat")
+        self.assertEqual(normalize_capability_name("embedding"), "embedding")
+        self.assertEqual(normalize_capability_name("reranker"), "reranker")
+
+    def test_model_matches_capability(self):
+        caps = ModelCapabilities(
+            modalities=["image"],
+            features=["tools", "structured_outputs"],
+            task_type="Chat",
+        )
+        self.assertTrue(model_matches_capability(caps, "image"))
+        self.assertTrue(model_matches_capability(caps, "tools"))
+        self.assertTrue(model_matches_capability(caps, "structured_outputs"))
+        self.assertTrue(model_matches_capability(caps, "chat"))
+        self.assertTrue(model_matches_capability(caps, "multimodal"))
+        self.assertFalse(model_matches_capability(caps, "video"))
+        self.assertFalse(model_matches_capability(caps, "reasoning"))
+        self.assertFalse(model_matches_capability(caps, "embedding"))
+
+    def test_filter_models_by_capabilities(self):
+        m1 = ModelInfo(
+            id="gpt-4o",
+            capabilities=ModelCapabilities(
+                modalities=["image"],
+                features=["tools", "reasoning"],
+                task_type="Chat",
+            ),
+        )
+        m2 = ModelInfo(
+            id="deepseek-chat",
+            capabilities=ModelCapabilities(
+                modalities=["text"],
+                features=["tools"],
+                task_type="Chat",
+            ),
+        )
+        m3 = ModelInfo(
+            id="bge-m3",
+            capabilities=ModelCapabilities(
+                modalities=["text"],
+                features=[],
+                task_type="Embedding",
+            ),
+        )
+        models = [m1, m2, m3]
+
+        # No filter
+        self.assertEqual(len(filter_models_by_capabilities(models, [])), 3)
+
+        # Vision filter (should only return m1)
+        vision_models = filter_models_by_capabilities(models, ["vision"])
+        self.assertEqual(len(vision_models), 1)
+        self.assertEqual(vision_models[0].id, "gpt-4o")
+
+        # Tools filter (should return m1 and m2)
+        tool_models = filter_models_by_capabilities(models, ["tools"])
+        self.assertEqual(len(tool_models), 2)
+
+        # Multi-filter: vision AND reasoning (only m1)
+        multi = filter_models_by_capabilities(models, ["vision", "reasoning"])
+        self.assertEqual(len(multi), 1)
+        self.assertEqual(multi[0].id, "gpt-4o")
+
+        # Unmatched filter
+        empty = filter_models_by_capabilities(models, ["audio"])
+        self.assertEqual(len(empty), 0)
 
 
 if __name__ == "__main__":

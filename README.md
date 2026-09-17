@@ -100,6 +100,10 @@ python3 model_tester.py --url http://localhost:11434/v1 --token dummy
 # Ignore additional models on the fly
 python3 model_tester.py --ignore gpt-4o gpt-3.5-turbo
 
+# Filter models by capability (e.g. vision, tools, reasoning, json, embedding)
+python3 model_tester.py --filter-cap=vision
+python3 model_tester.py --filter-cap tools reasoning
+
 # Adjust concurrency and timeout
 python3 model_tester.py --parallel 5 --timeout 10
 

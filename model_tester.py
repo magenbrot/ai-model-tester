@@ -286,6 +286,63 @@ def is_model_ignored(model_id: str, ignored_models: list[str]) -> bool:
     return False
 
 
+def normalize_capability_name(cap: str) -> str:
+    """Normalizes capability aliases to canonical keys."""
+    c = cap.strip().lower()
+    mapping = {
+        "vision": "image",
+        "image": "image",
+        "video": "video",
+        "audio": "audio",
+        "tools": "tools",
+        "tool": "tools",
+        "function": "tools",
+        "functions": "tools",
+        "function_calling": "tools",
+        "reasoning": "reasoning",
+        "reason": "reasoning",
+        "thinking": "reasoning",
+        "json": "structured_outputs",
+        "structured": "structured_outputs",
+        "structured_outputs": "structured_outputs",
+        "streaming": "streaming",
+        "stream": "streaming",
+        "chat": "chat",
+        "embedding": "embedding",
+        "embed": "embedding",
+        "embeddings": "embedding",
+        "rerank": "reranker",
+        "reranker": "reranker",
+        "completion": "completion",
+    }
+    return mapping.get(c, c)
+
+
+def model_matches_capability(caps: ModelCapabilities, normalized_cap: str) -> bool:
+    """Checks if a model's capabilities match a normalized capability key."""
+    if normalized_cap == "multimodal":
+        return bool("image" in caps.modalities or "video" in caps.modalities or "audio" in caps.modalities)
+    if normalized_cap in caps.modalities:
+        return True
+    if normalized_cap in caps.features:
+        return True
+    if normalized_cap == caps.task_type.lower():
+        return True
+    return False
+
+
+def filter_models_by_capabilities(models: list[ModelInfo], required_caps: list[str]) -> list[ModelInfo]:
+    """Filters a list of models to only those matching all required capabilities."""
+    if not required_caps:
+        return models
+
+    normalized_required = [normalize_capability_name(c) for c in required_caps]
+    return [
+        m for m in models
+        if all(model_matches_capability(m.capabilities, req) for req in normalized_required)
+    ]
+
+
 def test_single_model(
     model_info: ModelInfo,
     base_url: str,
@@ -543,7 +600,14 @@ def format_latency(latency_ms: float, status: str) -> Text:
         return Text(f"{latency_ms / 1000:5.2f} s", style="bold red")
 
 
-def display_header(base_url: str, token: str, ignored: list[str], max_concurrency: int, timeout: int):
+def display_header(
+    base_url: str,
+    token: str,
+    ignored: list[str],
+    max_concurrency: int,
+    timeout: int,
+    filter_caps: Optional[list[str]] = None,
+):
     """Displays an informative header panel before running tests."""
     masked = config.mask_token(token)
     ignored_str = ", ".join(ignored) if ignored else "[dim]None[/dim]"
@@ -555,6 +619,9 @@ def display_header(base_url: str, token: str, ignored: list[str], max_concurrenc
     content.append(f"{masked}\n")
     content.append("Parallel Req : ", style="bold cyan")
     content.append(f"{max_concurrency} Workers | Timeout: {timeout}s\n")
+    if filter_caps:
+        content.append("Cap Filter   : ", style="bold cyan")
+        content.append(f"{', '.join(filter_caps)}\n")
     content.append("Ignored IDs  : ", style="bold cyan")
     content.append(f"{ignored_str}")
 
@@ -680,6 +747,12 @@ def main():
         help="Additional model IDs to ignore (space or comma separated)",
     )
     parser.add_argument(
+        "--filter-cap",
+        nargs="*",
+        default=[],
+        help="Filter models by capability/modality (e.g. vision, tools, reasoning, json, streaming, audio, video). Multiple filters can be space- or comma-separated.",
+    )
+    parser.add_argument(
         "--timeout",
         type=int,
         default=config.REQUEST_TIMEOUT,
@@ -712,6 +785,14 @@ def main():
             ignored_models.extend(parts)
     ignored_models = list(dict.fromkeys(ignored_models))
 
+    # Parse capability filter
+    filter_caps: list[str] = []
+    if args.filter_cap:
+        for fc in args.filter_cap:
+            parts = [p.strip().lower() for p in fc.split(",") if p.strip()]
+            filter_caps.extend(parts)
+    filter_caps = list(dict.fromkeys(filter_caps))
+
     # Display initial header
     display_header(
         base_url=args.url,
@@ -719,6 +800,7 @@ def main():
         ignored=ignored_models,
         max_concurrency=args.parallel,
         timeout=args.timeout,
+        filter_caps=filter_caps,
     )
 
     # 1. Fetch models
@@ -734,6 +816,19 @@ def main():
         sys.exit(0)
 
     console.print(f"[bold green]✔ {len(models)} model(s) successfully found.[/bold green]\n")
+
+    # Filter models by capabilities if requested
+    if filter_caps:
+        caps_label = ", ".join(filter_caps)
+        models = filter_models_by_capabilities(models, filter_caps)
+        if not models:
+            console.print(
+                f"[bold yellow]No models match capability filter: '{caps_label}'[/bold yellow]"
+            )
+            sys.exit(0)
+        console.print(
+            f"[bold cyan]ℹ Filtered by capability '{caps_label}': {len(models)} model(s) matching.[/bold cyan]\n"
+        )
 
     if args.dry_run:
         console.print("[yellow]Dry-run enabled: Test requests skipped.[/yellow]")
