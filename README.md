@@ -78,6 +78,9 @@ IGNORED_MODELS = ["whisper-1", "dall-e-3"]
 
 ## 🖥️ Usage
 
+> [!NOTE]
+> **Token Usage & API Costs**: Live tests execute a minimal request per model (typically ~5–10 input tokens and up to 10 max output tokens, e.g., *"Reply with 'OK' only."*). Depending on your API provider and pricing tiers, this will consume tokens and may incur small API costs. Use `--dry-run` to inspect models and capabilities without sending test queries or incurring costs.
+
 ### 1. Default Run
 Reads configuration from `.env` / `config.py` and runs the suite:
 
