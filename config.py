@@ -9,6 +9,7 @@ Values can be specified:
 
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Load .env from this script's directory or the current working directory
@@ -27,7 +28,9 @@ else:
 # - https://openrouter.ai/api/v1
 # - http://localhost:11434/v1 (Ollama)
 # - http://localhost:8000/v1 (vLLM)
-API_BASE_URL: str = os.getenv("API_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+API_BASE_URL: str = (
+    os.getenv("API_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+)
 
 # Authentication token / API key
 API_TOKEN: str = os.getenv("API_TOKEN", "").strip()
@@ -39,7 +42,9 @@ API_TOKEN: str = os.getenv("API_TOKEN", "").strip()
 # Can be set in .env as comma-separated list ("model1,model2") or here as a list.
 _raw_ignored = os.getenv("IGNORED_MODELS", "")
 if _raw_ignored:
-    IGNORED_MODELS: list[str] = [m.strip() for m in _raw_ignored.split(",") if m.strip()]
+    IGNORED_MODELS: list[str] = [
+        m.strip() for m in _raw_ignored.split(",") if m.strip()
+    ]
 else:
     # Default list if not specified in .env:
     IGNORED_MODELS: list[str] = [

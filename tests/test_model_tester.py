@@ -6,12 +6,13 @@ Can be executed with either `pytest` or Python's built-in `unittest`:
 
 import unittest
 from unittest.mock import MagicMock, patch
+
 import requests
 
+import config
 from model_tester import (
     ModelCapabilities,
     ModelInfo,
-    TestResult,
     fetch_models,
     filter_models_by_capabilities,
     format_capabilities,
@@ -25,7 +26,6 @@ from model_tester import (
     resolve_api_endpoints,
     test_single_model,
 )
-import config
 
 
 class TestEndpointsAndHeaders(unittest.TestCase):
@@ -40,7 +40,9 @@ class TestEndpointsAndHeaders(unittest.TestCase):
     def test_resolve_api_endpoints_with_v1_and_trailing_slash(self):
         endpoints = resolve_api_endpoints("https://api.openai.com/v1/")
         self.assertEqual(endpoints["models"], "https://api.openai.com/v1/models")
-        self.assertEqual(endpoints["chat"], "https://api.openai.com/v1/chat/completions")
+        self.assertEqual(
+            endpoints["chat"], "https://api.openai.com/v1/chat/completions"
+        )
         self.assertEqual(endpoints["alt_rerank"], "https://api.openai.com/rerank")
 
     def test_get_headers_with_token(self):
@@ -155,9 +157,7 @@ class TestModelTesting(unittest.TestCase):
     def test_test_single_model_success(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "OK"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": "OK"}}]}
         mock_post.return_value = mock_response
 
         info = ModelInfo(id="gpt-4o-mini")
