@@ -282,7 +282,15 @@ def fetch_models(base_url: str, token: str, timeout: int) -> list[ModelInfo]:
         try:
             response = requests.get(url, headers=headers, timeout=timeout)
             if response.status_code == 200:
-                data = response.json()
+                try:
+                    data = response.json()
+                except ValueError:
+                    ctype = response.headers.get("content-type", "unknown")
+                    last_error = f"Response from '{url}' was HTTP 200 but not valid JSON (Content-Type: {ctype})."
+                    if "html" in ctype or "<html" in response.text[:100].lower():
+                        last_error += " It appears this URL serves a web dashboard instead of an API. If your URL starts with 'app.', try 'api.' instead."
+                    continue
+
                 raw_items = []
                 # 1. OpenAI format: {"data": [{...}, ...]}
                 if (
@@ -323,8 +331,11 @@ def fetch_models(base_url: str, token: str, timeout: int) -> list[ModelInfo]:
 
 
 def is_model_ignored(model_id: str, ignored_models: list[str]) -> bool:
-    """Checks whether a model should be ignored (exact or case-insensitive match)."""
+    """Checks whether a model should be ignored (exact match, wildcard permission pattern, or case-insensitive match)."""
     clean_id = model_id.strip().lower()
+    # Ignore proxy wildcard / RBAC permission entries (e.g. "*", "openai/*", "anthropic/*")
+    if clean_id == "*" or clean_id.endswith("/*"):
+        return True
     for ignored in ignored_models:
         if clean_id == ignored.strip().lower():
             return True
@@ -408,13 +419,18 @@ def test_single_model(
     caps = model_info.capabilities
 
     if is_model_ignored(model_id, ignored_models):
+        clean_id = model_id.strip().lower()
+        if clean_id == "*" or clean_id.endswith("/*"):
+            msg = "Wildcard entry (not runnable)"
+        else:
+            msg = "Ignored in configuration"
         return TestResult(
             model_id=model_id,
             status="IGNORED",
             model_type=caps.task_type,
             latency_ms=0.0,
             status_code=None,
-            message="Ignored in configuration",
+            message=msg,
             capabilities=caps,
         )
 
@@ -924,7 +940,11 @@ def main():
                 model_type=m.capabilities.task_type,
                 latency_ms=0.0,
                 status_code=None,
-                message="Ignored in configuration"
+                message=(
+                    "Wildcard entry (not runnable)"
+                    if (m.id.strip().lower() == "*" or m.id.strip().lower().endswith("/*"))
+                    else "Ignored in configuration"
+                )
                 if is_model_ignored(m.id, ignored_models)
                 else "Found (Dry-Run)",
                 capabilities=m.capabilities,
