@@ -1,6 +1,6 @@
 # 🧪 AI Model Availability Tester (Health Checker)
 
-[![CI](https://github.com/OWNER/ai-model-tester/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/ai-model-tester/actions/workflows/ci.yml)
+[![CI](https://github.com/magenbrot/ai-model-tester/actions/workflows/ci.yml/badge.svg)](https://github.com/magenbrot/ai-model-tester/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![OpenAI Compatible](https://img.shields.io/badge/API-OpenAI%20Compatible-orange.svg)](#)
 [![UI: Rich](https://img.shields.io/badge/UI-Rich-magenta.svg)](https://github.com/Textualize/rich)
