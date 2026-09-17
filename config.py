@@ -40,11 +40,16 @@ API_TOKEN: str = os.getenv("API_TOKEN", "").strip()
 # ------------------------------------------------------------------------------
 # Model IDs to exclude from testing.
 # Can be set in .env as comma-separated list ("model1,model2") or here as a list.
-_raw_ignored = os.getenv("IGNORED_MODELS", "")
-if _raw_ignored:
-    IGNORED_MODELS: list[str] = [
-        m.strip() for m in _raw_ignored.split(",") if m.strip()
-    ]
+_env_ignored = os.getenv("IGNORED_MODELS")
+if _env_ignored is not None:
+    # Explicitly configured in .env / environment (e.g. IGNORED_MODELS="" or "none")
+    _cleaned = _env_ignored.strip().strip('"').strip("'")
+    if _cleaned.lower() in ("", "none", "null", "[]"):
+        IGNORED_MODELS: list[str] = []
+    else:
+        IGNORED_MODELS: list[str] = [
+            m.strip() for m in _cleaned.split(",") if m.strip()
+        ]
 else:
     # Default list if not specified in .env:
     IGNORED_MODELS: list[str] = [

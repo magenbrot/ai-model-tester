@@ -76,6 +76,10 @@ class TestConfigHelpers(unittest.TestCase):
         self.assertTrue(is_model_ignored("WHISPER-1", ignored))
         self.assertTrue(is_model_ignored(" dall-e-3 ", ignored))
         self.assertFalse(is_model_ignored("gpt-4o", ignored))
+        # Wildcard entries should always be ignored
+        self.assertTrue(is_model_ignored("*", []))
+        self.assertTrue(is_model_ignored("openai/*", []))
+        self.assertTrue(is_model_ignored("anthropic/*", []))
 
 
 class TestModelParsing(unittest.TestCase):

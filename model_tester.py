@@ -690,7 +690,6 @@ def display_header(
 ):
     """Displays an informative header panel before running tests."""
     masked = config.mask_token(token)
-    ignored_str = ", ".join(ignored) if ignored else "[dim]None[/dim]"
 
     content = Text()
     content.append("API Base URL : ", style="bold cyan")
@@ -703,7 +702,10 @@ def display_header(
         content.append("Cap Filter   : ", style="bold cyan")
         content.append(f"{', '.join(filter_caps)}\n")
     content.append("Ignored IDs  : ", style="bold cyan")
-    content.append(f"{ignored_str}")
+    if ignored:
+        content.append(", ".join(ignored))
+    else:
+        content.append("None", style="dim")
 
     panel = Panel(
         content,

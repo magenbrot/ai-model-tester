@@ -55,7 +55,7 @@ API_BASE_URL=https://api.openai.com/v1
 # API token / secret key
 API_TOKEN=sk-your-token-here
 
-# Comma-separated list of model IDs to ignore
+# Comma-separated list of model IDs to ignore (set to "" or "none" to test all models)
 IGNORED_MODELS=whisper-1,dall-e-3,tts-1,text-moderation-latest
 
 # Optional settings
