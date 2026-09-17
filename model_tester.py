@@ -12,11 +12,10 @@ Tests OpenAI-compatible API endpoints:
 
 import argparse
 import concurrent.futures
-import json
 import sys
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import requests
 from rich.console import Console
@@ -39,10 +38,14 @@ console = Console()
 
 @dataclass
 class ModelCapabilities:
-    modalities: list[str] = field(default_factory=list)  # ["text", "image", "video", "audio"]
-    features: list[str] = field(default_factory=list)  # ["tools", "reasoning", "structured_outputs", "streaming"]
-    context_length: Optional[int] = None
-    max_output_tokens: Optional[int] = None
+    modalities: list[str] = field(
+        default_factory=list
+    )  # ["text", "image", "video", "audio"]
+    features: list[str] = field(
+        default_factory=list
+    )  # ["tools", "reasoning", "structured_outputs", "streaming"]
+    context_length: int | None = None
+    max_output_tokens: int | None = None
     task_type: str = "Chat"  # "Chat", "Completion", "Embedding", "Reranker", "Unknown"
 
 
@@ -60,9 +63,9 @@ class TestResult:
     status: str  # "OK", "ERROR", "IGNORED"
     model_type: str  # "Chat", "Completion", "Embedding", "Reranker", "Unknown"
     latency_ms: float
-    status_code: Optional[int]
+    status_code: int | None
     message: str
-    capabilities: Optional[ModelCapabilities] = None
+    capabilities: ModelCapabilities | None = None
 
 
 def resolve_api_endpoints(base_url: str) -> dict[str, str]:
@@ -112,8 +115,8 @@ def parse_model_info(item: Any) -> ModelInfo:
 
     modalities: list[str] = []
     features: list[str] = []
-    context_length: Optional[int] = None
-    max_output_tokens: Optional[int] = None
+    context_length: int | None = None
+    max_output_tokens: int | None = None
     task_type = "Chat"
 
     # 1. Input modalities & context length
@@ -147,7 +150,10 @@ def parse_model_info(item: Any) -> ModelInfo:
                     task_type = "Embedding"
                 elif otype in ("rerank", "reranker"):
                     task_type = "Reranker"
-                elif otype in ("text", "completion", "chat") and task_type not in ("Embedding", "Reranker"):
+                elif otype in ("text", "completion", "chat") and task_type not in (
+                    "Embedding",
+                    "Reranker",
+                ):
                     task_type = "Chat"
 
                 params = m.get("supported_parameters", {})
@@ -156,7 +162,9 @@ def parse_model_info(item: Any) -> ModelInfo:
                         features.append("tools")
                     if "reasoning" in params and "reasoning" not in features:
                         features.append("reasoning")
-                    if ("structured_outputs" in params or "response_format" in params) and "structured_outputs" not in features:
+                    if (
+                        "structured_outputs" in params or "response_format" in params
+                    ) and "structured_outputs" not in features:
                         features.append("structured_outputs")
                 elif isinstance(params, list):
                     for p in params:
@@ -165,7 +173,9 @@ def parse_model_info(item: Any) -> ModelInfo:
                             features.append("tools")
                         elif "reason" in p_str and "reasoning" not in features:
                             features.append("reasoning")
-                        elif ("struct" in p_str or "json" in p_str) and "structured_outputs" not in features:
+                        elif (
+                            "struct" in p_str or "json" in p_str
+                        ) and "structured_outputs" not in features:
                             features.append("structured_outputs")
 
                 if m.get("streaming") and "streaming" not in features:
@@ -180,7 +190,12 @@ def parse_model_info(item: Any) -> ModelInfo:
 
     # 3. Fallback / Alternative Schemas (e.g. OpenRouter, vLLM, LiteLLM)
     if not context_length:
-        for k in ("context_length", "context_window", "max_model_len", "max_context_length"):
+        for k in (
+            "context_length",
+            "context_window",
+            "max_model_len",
+            "max_context_length",
+        ):
             if k in item and isinstance(item[k], (int, float)):
                 context_length = int(item[k])
                 break
@@ -188,9 +203,10 @@ def parse_model_info(item: Any) -> ModelInfo:
     or_arch = item.get("architecture", {})
     if isinstance(or_arch, dict):
         modality_str = str(or_arch.get("modality", "")).lower()
-        if "multimodal" in modality_str or "image" in modality_str:
-            if "image" not in modalities:
-                modalities.append("image")
+        if (
+            "multimodal" in modality_str or "image" in modality_str
+        ) and "image" not in modalities:
+            modalities.append("image")
 
     or_params = item.get("supported_parameters", [])
     if isinstance(or_params, list):
@@ -210,13 +226,32 @@ def parse_model_info(item: Any) -> ModelInfo:
     elif any(k in mid_lower for k in ("embed", "bge-", "e5-", "text-similarity")):
         task_type = "Embedding"
 
-    if any(k in mid_lower for k in ("vision", "-vl", "llava", "pixtral", "4o", "gemini-1.5", "gemini-2.0", "claude-3")):
-        if "image" not in modalities:
-            modalities.append("image")
+    if (
+        any(
+            k in mid_lower
+            for k in (
+                "vision",
+                "-vl",
+                "llava",
+                "pixtral",
+                "4o",
+                "gemini-1.5",
+                "gemini-2.0",
+                "claude-3",
+            )
+        )
+        and "image" not in modalities
+    ):
+        modalities.append("image")
 
-    if any(k in mid_lower for k in ("deepseek-r1", "o1-", "o3-", "-reasoning", "-thinking")):
-        if "reasoning" not in features:
-            features.append("reasoning")
+    if (
+        any(
+            k in mid_lower
+            for k in ("deepseek-r1", "o1-", "o3-", "-reasoning", "-thinking")
+        )
+        and "reasoning" not in features
+    ):
+        features.append("reasoning")
 
     caps = ModelCapabilities(
         modalities=modalities,
@@ -250,10 +285,18 @@ def fetch_models(base_url: str, token: str, timeout: int) -> list[ModelInfo]:
                 data = response.json()
                 raw_items = []
                 # 1. OpenAI format: {"data": [{...}, ...]}
-                if isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
+                if (
+                    isinstance(data, dict)
+                    and "data" in data
+                    and isinstance(data["data"], list)
+                ):
                     raw_items = data["data"]
                 # 2. Ollama format: {"models": [{...}, ...]}
-                elif isinstance(data, dict) and "models" in data and isinstance(data["models"], list):
+                elif (
+                    isinstance(data, dict)
+                    and "models" in data
+                    and isinstance(data["models"], list)
+                ):
                     raw_items = data["models"]
                 # 3. Direct array: [{...}, ...] or ["model1", ...]
                 elif isinstance(data, list):
@@ -274,7 +317,9 @@ def fetch_models(base_url: str, token: str, timeout: int) -> list[ModelInfo]:
         except requests.exceptions.RequestException as e:
             last_error = str(e)
 
-    raise RuntimeError(f"Could not fetch models from '{base_url}'. Details: {last_error}")
+    raise RuntimeError(
+        f"Could not fetch models from '{base_url}'. Details: {last_error}"
+    )
 
 
 def is_model_ignored(model_id: str, ignored_models: list[str]) -> bool:
@@ -321,25 +366,32 @@ def normalize_capability_name(cap: str) -> str:
 def model_matches_capability(caps: ModelCapabilities, normalized_cap: str) -> bool:
     """Checks if a model's capabilities match a normalized capability key."""
     if normalized_cap == "multimodal":
-        return bool("image" in caps.modalities or "video" in caps.modalities or "audio" in caps.modalities)
+        return bool(
+            "image" in caps.modalities
+            or "video" in caps.modalities
+            or "audio" in caps.modalities
+        )
     if normalized_cap in caps.modalities:
         return True
     if normalized_cap in caps.features:
         return True
-    if normalized_cap == caps.task_type.lower():
-        return True
-    return False
+    return normalized_cap == caps.task_type.lower()
 
 
-def filter_models_by_capabilities(models: list[ModelInfo], required_caps: list[str]) -> list[ModelInfo]:
+def filter_models_by_capabilities(
+    models: list[ModelInfo], required_caps: list[str]
+) -> list[ModelInfo]:
     """Filters a list of models to only those matching all required capabilities."""
     if not required_caps:
         return models
 
     normalized_required = [normalize_capability_name(c) for c in required_caps]
     return [
-        m for m in models
-        if all(model_matches_capability(m.capabilities, req) for req in normalized_required)
+        m
+        for m in models
+        if all(
+            model_matches_capability(m.capabilities, req) for req in normalized_required
+        )
     ]
 
 
@@ -393,14 +445,22 @@ def test_single_model(
 
     start_time = time.perf_counter()
     try:
-        response = requests.post(endpoint_url, headers=headers, json=payload, timeout=timeout)
+        response = requests.post(
+            endpoint_url, headers=headers, json=payload, timeout=timeout
+        )
         latency_ms = (time.perf_counter() - start_time) * 1000
 
         # Fallbacks:
         # If Rerank returns 404, try alt_rerank
-        if response.status_code == 404 and model_type == "Reranker" and endpoints["rerank"] != endpoints["alt_rerank"]:
+        if (
+            response.status_code == 404
+            and model_type == "Reranker"
+            and endpoints["rerank"] != endpoints["alt_rerank"]
+        ):
             rerank_alt_start = time.perf_counter()
-            response = requests.post(endpoints["alt_rerank"], headers=headers, json=payload, timeout=timeout)
+            response = requests.post(
+                endpoints["alt_rerank"], headers=headers, json=payload, timeout=timeout
+            )
             latency_ms = (time.perf_counter() - rerank_alt_start) * 1000
 
         # If Chat returns 400/404, optionally fall back to legacy completions or embedding
@@ -471,7 +531,7 @@ def test_single_model(
                     message=clean_snippet,
                     capabilities=caps,
                 )
-            except Exception:
+            except (ValueError, KeyError, TypeError, AttributeError):
                 return TestResult(
                     model_id=model_id,
                     status="OK",
@@ -493,7 +553,7 @@ def test_single_model(
                         err_msg = str(err_val)
                 else:
                     err_msg = response.text
-            except Exception:
+            except (ValueError, KeyError, TypeError, AttributeError):
                 err_msg = response.text
 
             clean_err = " ".join(err_msg.split())
@@ -534,7 +594,11 @@ def test_single_model(
         )
 
 
-def format_context_length(tokens: Optional[int]) -> Text:
+# Prevent pytest from collecting test_single_model as a test function
+test_single_model.__test__ = False
+
+
+def format_context_length(tokens: int | None) -> Text:
     """Formats context length into a compact k/M string."""
     if not tokens or tokens <= 0:
         return Text("-", style="dim")
@@ -550,7 +614,7 @@ def format_context_length(tokens: Optional[int]) -> Text:
         return Text(str(tokens), style="dim")
 
 
-def format_capabilities(caps: Optional[ModelCapabilities]) -> Text:
+def format_capabilities(caps: ModelCapabilities | None) -> Text:
     """Formats capabilities into concise badges."""
     if not caps:
         return Text("-", style="dim")
@@ -606,7 +670,7 @@ def display_header(
     ignored: list[str],
     max_concurrency: int,
     timeout: int,
-    filter_caps: Optional[list[str]] = None,
+    filter_caps: list[str] | None = None,
 ):
     """Displays an informative header panel before running tests."""
     masked = config.mask_token(token)
@@ -716,14 +780,25 @@ def display_summary(results: list[TestResult], elapsed_seconds: float):
     summary_text.append(f"Models found: {total}  |  ", style="bold")
     summary_text.append(f"Tested: {tested_count}  |  ", style="bold cyan")
     summary_text.append(f"Passed: {ok_count}  |  ", style="bold green")
-    summary_text.append(f"Failed: {error_count}  |  ", style="bold red" if error_count > 0 else "dim")
-    summary_text.append(f"Ignored: {ignored_count}\n", style="bold yellow" if ignored_count > 0 else "dim")
+    summary_text.append(
+        f"Failed: {error_count}  |  ", style="bold red" if error_count > 0 else "dim"
+    )
+    summary_text.append(
+        f"Ignored: {ignored_count}\n",
+        style="bold yellow" if ignored_count > 0 else "dim",
+    )
     summary_text.append(f"Total duration: {elapsed_seconds:.2f}s", style="dim")
     if ok_latencies:
-        summary_text.append(f"  |  Avg Latency (OK): {avg_latency:.0f}ms", style="dim green")
+        summary_text.append(
+            f"  |  Avg Latency (OK): {avg_latency:.0f}ms", style="dim green"
+        )
 
     border_color = "green" if error_count == 0 else "red"
-    title_status = "[bold green]All tests passed[/bold green]" if error_count == 0 else f"[bold red]{error_count} model(s) failed[/bold red]"
+    title_status = (
+        "[bold green]All tests passed[/bold green]"
+        if error_count == 0
+        else f"[bold red]{error_count} model(s) failed[/bold red]"
+    )
 
     panel = Panel(
         summary_text,
@@ -738,8 +813,12 @@ def main():
     parser = argparse.ArgumentParser(
         description="Tests availability and health of AI models on OpenAI-compatible APIs."
     )
-    parser.add_argument("--url", default=config.API_BASE_URL, help="API Base URL (overrides .env)")
-    parser.add_argument("--token", default=config.API_TOKEN, help="API Token (overrides .env)")
+    parser.add_argument(
+        "--url", default=config.API_BASE_URL, help="API Base URL (overrides .env)"
+    )
+    parser.add_argument(
+        "--token", default=config.API_TOKEN, help="API Token (overrides .env)"
+    )
     parser.add_argument(
         "--ignore",
         nargs="*",
@@ -804,10 +883,14 @@ def main():
     )
 
     # 1. Fetch models
-    with console.status("[bold cyan]Fetching model list from server...", spinner="dots"):
+    with console.status(
+        "[bold cyan]Fetching model list from server...", spinner="dots"
+    ):
         try:
-            models = fetch_models(base_url=args.url, token=args.token, timeout=args.timeout)
-        except Exception as e:
+            models = fetch_models(
+                base_url=args.url, token=args.token, timeout=args.timeout
+            )
+        except (RuntimeError, OSError, requests.exceptions.RequestException) as e:
             console.print(f"\n[bold red]Error fetching models:[/bold red] {e}")
             sys.exit(2)
 
@@ -815,7 +898,9 @@ def main():
         console.print("[bold yellow]No models found at endpoint![/bold yellow]")
         sys.exit(0)
 
-    console.print(f"[bold green]✔ {len(models)} model(s) successfully found.[/bold green]\n")
+    console.print(
+        f"[bold green]✔ {len(models)} model(s) successfully found.[/bold green]\n"
+    )
 
     # Filter models by capabilities if requested
     if filter_caps:
@@ -839,7 +924,9 @@ def main():
                 model_type=m.capabilities.task_type,
                 latency_ms=0.0,
                 status_code=None,
-                message="Ignored in configuration" if is_model_ignored(m.id, ignored_models) else "Found (Dry-Run)",
+                message="Ignored in configuration"
+                if is_model_ignored(m.id, ignored_models)
+                else "Found (Dry-Run)",
                 capabilities=m.capabilities,
             )
             for m in models
@@ -852,8 +939,12 @@ def main():
                     "model_id": r.model_id,
                     "status": r.status,
                     "model_type": r.model_type,
-                    "context_length": r.capabilities.context_length if r.capabilities else None,
-                    "max_output_tokens": r.capabilities.max_output_tokens if r.capabilities else None,
+                    "context_length": r.capabilities.context_length
+                    if r.capabilities
+                    else None,
+                    "max_output_tokens": r.capabilities.max_output_tokens
+                    if r.capabilities
+                    else None,
                     "modalities": r.capabilities.modalities if r.capabilities else [],
                     "capabilities": r.capabilities.features if r.capabilities else [],
                     "latency_ms": round(r.latency_ms, 2),
@@ -882,7 +973,9 @@ def main():
     ) as progress:
         task = progress.add_task("[cyan]Testing AI models...", total=len(models))
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.parallel) as executor:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=args.parallel
+        ) as executor:
             future_to_model = {
                 executor.submit(
                     test_single_model,
@@ -900,7 +993,7 @@ def main():
                 model_id = future_to_model[future]
                 try:
                     res = future.result()
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - thread pool safety net
                     minfo = model_map.get(model_id)
                     res = TestResult(
                         model_id=model_id,
@@ -931,8 +1024,12 @@ def main():
                 "model_id": r.model_id,
                 "status": r.status,
                 "model_type": r.model_type,
-                "context_length": r.capabilities.context_length if r.capabilities else None,
-                "max_output_tokens": r.capabilities.max_output_tokens if r.capabilities else None,
+                "context_length": r.capabilities.context_length
+                if r.capabilities
+                else None,
+                "max_output_tokens": r.capabilities.max_output_tokens
+                if r.capabilities
+                else None,
                 "modalities": r.capabilities.modalities if r.capabilities else [],
                 "capabilities": r.capabilities.features if r.capabilities else [],
                 "latency_ms": round(r.latency_ms, 2),
