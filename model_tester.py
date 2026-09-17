@@ -944,7 +944,10 @@ def main():
                 status_code=None,
                 message=(
                     "Wildcard entry (not runnable)"
-                    if (m.id.strip().lower() == "*" or m.id.strip().lower().endswith("/*"))
+                    if (
+                        m.id.strip().lower() == "*"
+                        or m.id.strip().lower().endswith("/*")
+                    )
                     else "Ignored in configuration"
                 )
                 if is_model_ignored(m.id, ignored_models)
