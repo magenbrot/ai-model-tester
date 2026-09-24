@@ -116,6 +116,28 @@ class TestModelParsing(unittest.TestCase):
         self.assertIn("reasoning", info.capabilities.features)
         self.assertIn("structured_outputs", info.capabilities.features)
 
+    def test_parse_model_info_tools_reasoning_heuristics(self):
+        cases = {
+            "vllm/release/gpt-oss-120b": ("tools", "reasoning"),
+            "vllm/release/qwen3.6-27b": ("tools", "reasoning"),
+            "vllm/qsu/glm-5-2": ("tools",),
+            "vllm/release/deepseek-v41-flash": ("tools",),
+            "vllm/release/gemma-4-31b-it": ("tools",),
+        }
+        for mid, expected in cases.items():
+            info = parse_model_info({"id": mid})
+            feats = set(info.capabilities.features)
+            for feat in expected:
+                self.assertIn(feat, feats, f"{mid} missing {feat}")
+
+    def test_parse_model_info_no_tools_for_non_chat(self):
+        rerank = parse_model_info({"id": "vllm/release/bge-reranker-v2-m3"})
+        self.assertEqual(rerank.capabilities.task_type, "Reranker")
+        self.assertNotIn("tools", rerank.capabilities.features)
+        emb = parse_model_info({"id": "bge-m3"})
+        self.assertEqual(emb.capabilities.task_type, "Embedding")
+        self.assertNotIn("tools", emb.capabilities.features)
+
 
 class TestFormattingHelpers(unittest.TestCase):
     def test_format_context_length(self):

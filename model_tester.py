@@ -247,11 +247,61 @@ def parse_model_info(item: Any) -> ModelInfo:
     if (
         any(
             k in mid_lower
-            for k in ("deepseek-r1", "o1-", "o3-", "-reasoning", "-thinking")
+            for k in (
+                "deepseek-r",
+                "o1-",
+                "o3-",
+                "o4-",
+                "-reasoning",
+                "-thinking",
+                "gpt-oss",
+                "qwq",
+                "qwen3",
+            )
         )
         and "reasoning" not in features
     ):
         features.append("reasoning")
+
+    if (
+        task_type in ("Chat", "Completion")
+        and any(
+            k in mid_lower
+            for k in (
+                "gpt-oss",
+                "gpt-4",
+                "gpt-5",
+                "o1-",
+                "o3-",
+                "o4-",
+                "qwen3",
+                "qwen2.5",
+                "qwq",
+                "glm-4",
+                "glm-5",
+                "deepseek",
+                "gemma-3",
+                "gemma-4",
+                "llama-3",
+                "llama-4",
+                "mistral",
+                "ministral",
+                "magistral",
+                "phi-3",
+                "phi-4",
+                "command-r",
+                "command-a",
+                "claude-3",
+                "claude-4",
+                "gemini-1.5",
+                "gemini-2",
+                "gemini-3",
+                "grok",
+            )
+        )
+        and "tools" not in features
+    ):
+        features.append("tools")
 
     caps = ModelCapabilities(
         modalities=modalities,
@@ -652,16 +702,13 @@ def format_capabilities(caps: ModelCapabilities | None) -> Text:
     if "structured_outputs" in caps.features:
         parts.append(Text("📋 JSON", style="bold bright_cyan"))
 
+    if "streaming" in caps.features:
+        parts.append(Text("⚡ Stream", style="dim"))
+
     if not parts:
-        if "streaming" in caps.features:
-            return Text("⚡ Stream", style="dim")
         return Text("-", style="dim")
 
-    res = Text()
-    for i, p in enumerate(parts):
-        if i > 0:
-            res.append(" ")
-        res.append_text(p)
+    res = Text(", ").join(parts)
     return res
 
 
